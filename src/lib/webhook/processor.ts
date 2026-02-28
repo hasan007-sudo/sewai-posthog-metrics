@@ -1,0 +1,105 @@
+import type { PrismaClient } from "@/generated/prisma/client";
+import type { PostHogWebhookPayload } from "@/types/posthog";
+
+import { handleSessionStarted } from "./handlers/session-started";
+import { handleSessionEnded } from "./handlers/session-ended";
+import { handleQuestionCompleted } from "./handlers/question-completed";
+import { handleNextActivity } from "./handlers/next-activity";
+import { handleHintRequested } from "./handlers/hint-requested";
+import { handleHintRevealed } from "./handlers/hint-revealed";
+import { handleHintResponse } from "./handlers/hint-response";
+
+type EventHandler = (
+  prisma: PrismaClient,
+  studentId: string,
+  properties: Record<string, unknown>,
+  timestamp: string
+) => Promise<void>;
+
+const EVENT_HANDLERS: Record<string, EventHandler> = {
+  monologue_session_started: handleSessionStarted,
+  monologue_session_end_clicked: handleSessionEnded,
+  monologue_question_completed: handleQuestionCompleted,
+  next_activity_clicked: handleNextActivity,
+  hint_requested: handleHintRequested,
+  hint_revealed: handleHintRevealed,
+  hint_followed_by_response: handleHintResponse,
+};
+
+export async function processWebhookEvent(
+  prisma: PrismaClient,
+  payload: PostHogWebhookPayload
+): Promise<void> {
+  const { event, distinct_id, properties, timestamp } = payload;
+  const eventTimestamp = timestamp ?? new Date().toISOString();
+
+  // 1. Store raw event
+  const rawEvent = await prisma.rawEvent.create({
+    data: {
+      eventType: event,
+      distinctId: distinct_id,
+      properties: properties as object,
+      timestamp: new Date(eventTimestamp),
+      processed: false,
+    },
+  });
+
+  try {
+    // 2. Upsert student by email (distinct_id is the student email)
+    const studentName =
+      (properties.student_name as string | undefined) ?? null;
+
+    const student = await prisma.student.upsert({
+      where: { email: distinct_id },
+      update: {
+        ...(studentName ? { name: studentName } : {}),
+      },
+      create: {
+        email: distinct_id,
+        name: studentName,
+      },
+    });
+
+    // 3. Route to specific handler
+    const handler = EVENT_HANDLERS[event];
+
+    if (handler) {
+      await handler(prisma, student.id, properties, eventTimestamp);
+    } else {
+      console.warn(`[processor] No handler for event type: ${event}`);
+    }
+
+    // 4. Link raw event to session if room_name is present
+    const roomName = properties.room_name as string | undefined;
+    if (roomName) {
+      const session = await prisma.session.findUnique({
+        where: { roomName },
+        select: { id: true },
+      });
+
+      if (session) {
+        await prisma.rawEvent.update({
+          where: { id: rawEvent.id },
+          data: { sessionId: session.id },
+        });
+      }
+    }
+
+    // 5. Mark raw event as processed
+    await prisma.rawEvent.update({
+      where: { id: rawEvent.id },
+      data: {
+        processed: true,
+        processedAt: new Date(),
+      },
+    });
+  } catch (error) {
+    console.error(
+      `[processor] Error processing event ${event} (rawEvent=${rawEvent.id}):`,
+      error
+    );
+
+    // Leave raw event as unprocessed so it can be retried or inspected
+    throw error;
+  }
+}

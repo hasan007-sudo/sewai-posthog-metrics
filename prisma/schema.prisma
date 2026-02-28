@@ -1,0 +1,175 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================
+// CORE ENTITIES
+// ============================================
+
+model Activity {
+  id               String             @id @default(cuid())
+  externalId       String             @unique
+  title            String
+  questionCount    Int                @default(0)
+  sessions         Session[]
+  questionProgress QuestionProgress[]
+  hintUsages       HintUsage[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([externalId])
+}
+
+model Student {
+  id                 String              @id @default(cuid())
+  email              String              @unique
+  name               String?
+  sessions           Session[]
+  nextActivityClicks NextActivityClick[]
+  hintUsages         HintUsage[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@index([email])
+}
+
+model Session {
+  id               String             @id @default(cuid())
+  roomName         String             @unique
+  studentId        String
+  student          Student            @relation(fields: [studentId], references: [id])
+  activityId       String?
+  activity         Activity?          @relation(fields: [activityId], references: [id])
+
+  status           SessionStatus      @default(STARTED)
+  startedAt        DateTime
+  endedAt          DateTime?
+  durationMs       Int?
+
+  questionCount    Int                @default(0)
+  completedCount   Int                @default(0)
+
+  questionProgress QuestionProgress[]
+  hintUsages       HintUsage[]
+  rawEvents        RawEvent[]
+
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([studentId])
+  @@index([activityId])
+  @@index([roomName])
+  @@index([status])
+  @@index([startedAt])
+}
+
+enum SessionStatus {
+  STARTED
+  ENDED
+  ABANDONED
+}
+
+// ============================================
+// GRANULAR TRACKING
+// ============================================
+
+model QuestionProgress {
+  id            String   @id @default(cuid())
+  sessionId     String
+  session       Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  activityId    String
+  activity      Activity @relation(fields: [activityId], references: [id])
+
+  questionId    String
+  questionText  String?
+  completedAt   DateTime
+  attemptNumber Int      @default(1)
+
+  createdAt     DateTime @default(now())
+
+  @@unique([sessionId, questionId])
+  @@index([sessionId])
+  @@index([activityId])
+  @@index([completedAt])
+}
+
+model NextActivityClick {
+  id              String    @id @default(cuid())
+  studentId       String
+  student         Student   @relation(fields: [studentId], references: [id])
+
+  fromActivityId  String?
+  toActivityId    String?
+  toActivityTitle String?
+
+  clickedAt       DateTime
+  createdAt       DateTime  @default(now())
+
+  @@index([studentId])
+  @@index([clickedAt])
+}
+
+// ============================================
+// HINT TRACKING
+// ============================================
+
+model HintUsage {
+  id              String    @id @default(cuid())
+  sessionId       String
+  session         Session   @relation(fields: [sessionId], references: [id])
+  activityId      String
+  activity        Activity  @relation(fields: [activityId], references: [id])
+  studentId       String
+  student         Student   @relation(fields: [studentId], references: [id])
+
+  questionId      String?
+  questionText    String?
+
+  hintText        String?
+  agentResponse   String?
+  cached          Boolean   @default(false)
+
+  userResponse    String?
+  respondedAt     DateTime?
+
+  requestedAt     DateTime
+  revealedAt      DateTime?
+
+  createdAt       DateTime  @default(now())
+
+  @@index([sessionId])
+  @@index([activityId])
+  @@index([studentId])
+  @@index([requestedAt])
+}
+
+// ============================================
+// RAW EVENT STORAGE
+// ============================================
+
+model RawEvent {
+  id          String    @id @default(cuid())
+  eventType   String
+  distinctId  String
+  sessionId   String?
+  session     Session?  @relation(fields: [sessionId], references: [id])
+
+  properties  Json
+  timestamp   DateTime
+
+  processed   Boolean   @default(false)
+  processedAt DateTime?
+
+  createdAt   DateTime  @default(now())
+
+  @@index([eventType])
+  @@index([distinctId])
+  @@index([sessionId])
+  @@index([timestamp])
+  @@index([processed])
+}
