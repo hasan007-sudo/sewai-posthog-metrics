@@ -1,16 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { processWebhookEvent } from "@/lib/webhook/processor";
-import type { PostHogWebhookPayload } from "@/types/posthog";
+import type { PostHogWebhookPayload, PostHogWebhookWrapper } from "@/types/posthog";
+
+function normalizePostHogPayload(
+  wrapper: PostHogWebhookWrapper
+): PostHogWebhookPayload {
+  return {
+    event: wrapper.event.event,
+    distinct_id: wrapper.event.distinct_id,
+    properties: wrapper.event.properties,
+    timestamp: wrapper.event.timestamp,
+  };
+}
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // PostHog can send a single event or an array of events
-    const events: PostHogWebhookPayload[] = Array.isArray(body)
-      ? body
-      : [body];
+    // Log event count for monitoring
+    console.log("[webhook/posthog] Received webhook request");
+
+    // PostHog wraps events in { event: {...}, person: {...} } structure
+    // Normalize to internal format
+    let events: PostHogWebhookPayload[];
+
+    if (Array.isArray(body)) {
+      // Array of wrapped events
+      events = body.map(normalizePostHogPayload);
+    } else if (body.event && typeof body.event === "object") {
+      // Single wrapped event
+      events = [normalizePostHogPayload(body as PostHogWebhookWrapper)];
+    } else {
+      // Fallback: assume direct format (for backwards compatibility)
+      events = [body as PostHogWebhookPayload];
+    }
 
     const results = await Promise.allSettled(
       events.map((event) => processWebhookEvent(prisma, event))

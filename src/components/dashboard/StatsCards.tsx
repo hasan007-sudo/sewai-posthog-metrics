@@ -24,7 +24,7 @@ export function StatsCards({ stats }: { stats: Stats }) {
     {
       title: "Total Sessions",
       value: stats.totalSessions,
-      description: `${stats.sessionsByStatus.ENDED} ended, ${stats.sessionsByStatus.STARTED} active`,
+      description: `${stats.sessionsByStatus.STARTED} started, ${stats.sessionsByStatus.ENDED} ended`,
       icon: BookOpen,
     },
     {

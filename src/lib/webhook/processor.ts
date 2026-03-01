@@ -13,7 +13,7 @@ type EventHandler = (
   prisma: PrismaClient,
   studentId: string,
   properties: Record<string, unknown>,
-  timestamp: string
+  timestamp: string,
 ) => Promise<void>;
 
 const EVENT_HANDLERS: Record<string, EventHandler> = {
@@ -28,9 +28,22 @@ const EVENT_HANDLERS: Record<string, EventHandler> = {
 
 export async function processWebhookEvent(
   prisma: PrismaClient,
-  payload: PostHogWebhookPayload
+  payload: PostHogWebhookPayload,
 ): Promise<void> {
   const { event, distinct_id, properties, timestamp } = payload;
+
+  // Validate required fields
+  if (!event || !distinct_id) {
+    console.error("[processor] Invalid payload structure:", {
+      hasEvent: !!event,
+      hasDistinctId: !!distinct_id,
+      payload,
+    });
+    throw new Error(
+      `Missing required fields: ${!event ? "event" : ""} ${!distinct_id ? "distinct_id" : ""}`,
+    );
+  }
+
   const eventTimestamp = timestamp ?? new Date().toISOString();
 
   // 1. Store raw event
@@ -38,7 +51,7 @@ export async function processWebhookEvent(
     data: {
       eventType: event,
       distinctId: distinct_id,
-      properties: properties as object,
+      properties: (properties ?? {}) as object,
       timestamp: new Date(eventTimestamp),
       processed: false,
     },
@@ -46,8 +59,7 @@ export async function processWebhookEvent(
 
   try {
     // 2. Upsert student by email (distinct_id is the student email)
-    const studentName =
-      (properties.student_name as string | undefined) ?? null;
+    const studentName = (properties.student_name as string | undefined) ?? null;
 
     const student = await prisma.student.upsert({
       where: { email: distinct_id },
@@ -59,6 +71,7 @@ export async function processWebhookEvent(
         name: studentName,
       },
     });
+    console.log(`Received posthog event: ${event}`);
 
     // 3. Route to specific handler
     const handler = EVENT_HANDLERS[event];
@@ -96,7 +109,7 @@ export async function processWebhookEvent(
   } catch (error) {
     console.error(
       `[processor] Error processing event ${event} (rawEvent=${rawEvent.id}):`,
-      error
+      error,
     );
 
     // Leave raw event as unprocessed so it can be retried or inspected

@@ -12,6 +12,24 @@ export interface PostHogWebhookPayload {
   timestamp?: string;
 }
 
+export interface PostHogWebhookWrapper {
+  event: {
+    uuid: string;
+    distinct_id: string;
+    timestamp: string;
+    event: string;
+    properties: Record<string, unknown>;
+    elements_chain?: string;
+    url?: string;
+  };
+  person?: {
+    id: string;
+    properties: Record<string, unknown>;
+    name?: string;
+    url?: string;
+  };
+}
+
 export interface SessionStartedProperties {
   room_name: string;
   activity_id: string;
