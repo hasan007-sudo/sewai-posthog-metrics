@@ -49,7 +49,7 @@ export function StudentTable({ students }: { students: StudentRow[] }) {
           <TableRow key={student.id}>
             <TableCell>
               <Link
-                href={`/students/${student.id}`}
+                href={`/monologue-v2/students/${student.id}`}
                 className="hover:underline font-medium"
               >
                 {student.name || student.email}

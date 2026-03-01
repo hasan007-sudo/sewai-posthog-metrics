@@ -51,7 +51,7 @@ export function SessionList({ sessions }: { sessions: SessionRow[] }) {
         return (
           <Link
             key={session.id}
-            href={`/sessions/${session.roomName}`}
+            href={`/monologue-v2/sessions/${session.roomName}`}
             className="block border rounded-lg p-4 hover:bg-accent/50 transition-colors"
           >
             <div className="flex items-center justify-between mb-2">

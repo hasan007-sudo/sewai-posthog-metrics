@@ -84,7 +84,7 @@ export default async function StudentDetailPage({
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <Link href="/" className="text-muted-foreground hover:text-foreground">
+        <Link href="/monologue-v2/" className="text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <div>

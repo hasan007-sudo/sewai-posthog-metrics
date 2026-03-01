@@ -96,7 +96,7 @@ export default async function SessionDetailPage({
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Link
-          href={`/students/${session.student.id}`}
+          href={`/monologue-v2/students/${session.student.id}`}
           className="text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />

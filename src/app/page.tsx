@@ -1,121 +1,73 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { StatsCards } from "@/components/dashboard/StatsCards";
-import { StudentTable } from "@/components/dashboard/StudentTable";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 export const dynamic = "force-dynamic";
 
-async function getStats() {
-  const [
-    totalStudents,
-    totalSessions,
-    startedCount,
-    endedCount,
-    abandonedCount,
-    questionsAgg,
-    endedSessionsAgg,
-    totalNextActivityClicks,
-    totalHintUsages,
-  ] = await Promise.all([
+async function getMonologueStats() {
+  const [totalStudents, totalSessions] = await Promise.all([
     prisma.student.count(),
     prisma.session.count(),
-    prisma.session.count({ where: { status: "STARTED" } }),
-    prisma.session.count({ where: { status: "ENDED" } }),
-    prisma.session.count({ where: { status: "ABANDONED" } }),
-    prisma.session.aggregate({ _sum: { completedCount: true } }),
-    prisma.session.aggregate({
-      where: { status: "ENDED" },
-      _avg: { completedCount: true },
-    }),
-    prisma.nextActivityClick.count(),
-    prisma.hintUsage.count(),
   ]);
-
-  const endedWithQuestions = await prisma.session.findMany({
-    where: { status: "ENDED", questionCount: { gt: 0 } },
-    select: { completedCount: true, questionCount: true },
-  });
-
-  const avgCompletionRate =
-    endedWithQuestions.length > 0
-      ? endedWithQuestions.reduce(
-          (sum, s) => sum + s.completedCount / s.questionCount,
-          0
-        ) / endedWithQuestions.length
-      : 0;
-
-  return {
-    totalStudents,
-    totalSessions,
-    sessionsByStatus: {
-      STARTED: startedCount,
-      ENDED: endedCount,
-      ABANDONED: abandonedCount,
-    },
-    totalQuestionsCompleted: questionsAgg._sum.completedCount ?? 0,
-    avgQuestionsPerSession: endedSessionsAgg._avg.completedCount ?? 0,
-    avgCompletionRate: Math.round(avgCompletionRate * 10000) / 100,
-    totalNextActivityClicks,
-    totalHintUsages,
-  };
+  return { totalStudents, totalSessions };
 }
 
-async function getStudents() {
-  const students = await prisma.student.findMany({
-    include: {
-      sessions: {
-        select: { completedCount: true, startedAt: true },
-      },
-      hintUsages: { select: { id: true } },
-    },
-    orderBy: { updatedAt: "desc" },
-  });
-
-  return students.map((student) => {
-    const sessionCount = student.sessions.length;
-    const totalQuestionsCompleted = student.sessions.reduce(
-      (sum, s) => sum + s.completedCount,
-      0
-    );
-    const avgQuestionsPerSession =
-      sessionCount > 0 ? totalQuestionsCompleted / sessionCount : 0;
-    const lastActiveDate =
-      student.sessions.length > 0
-        ? student.sessions.reduce(
-            (latest, s) => (s.startedAt > latest ? s.startedAt : latest),
-            student.sessions[0].startedAt
-          )
-        : student.createdAt;
-
-    return {
-      id: student.id,
-      email: student.email,
-      name: student.name,
-      sessionCount,
-      totalQuestionsCompleted,
-      avgQuestionsPerSession: Math.round(avgQuestionsPerSession * 100) / 100,
-      lastActiveDate: lastActiveDate.toISOString(),
-      hintUsageCount: student.hintUsages.length,
-    };
-  });
-}
-
-export default async function DashboardPage() {
-  const [stats, students] = await Promise.all([getStats(), getStudents()]);
+export default async function HubPage() {
+  const monologueStats = await getMonologueStats();
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <h1 className="text-2xl font-bold">SEWAi Analytics Hub</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          SEWAi learning analytics overview
+          Overview of all SEWAi features and analytics
         </p>
       </div>
 
-      <StatsCards stats={stats} />
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <Link href="/monologue-v2/" className="block group">
+          <Card className="h-full transition-colors group-hover:border-primary">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">Monologue v2</CardTitle>
+                <Badge variant="default">Active</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Student monologue session analytics, question completion tracking, and hint usage insights.
+              </p>
+              <div className="flex gap-4 text-sm">
+                <div>
+                  <span className="font-semibold">{monologueStats.totalSessions}</span>{" "}
+                  <span className="text-muted-foreground">sessions</span>
+                </div>
+                <div>
+                  <span className="font-semibold">{monologueStats.totalStudents}</span>{" "}
+                  <span className="text-muted-foreground">students</span>
+                </div>
+              </div>
+              <p className="text-xs text-primary font-medium group-hover:underline">
+                View Dashboard &rarr;
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
 
-      <div>
-        <h2 className="text-lg font-semibold mb-4">Students</h2>
-        <StudentTable students={students} />
+        <Card className="h-full border-dashed opacity-60">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">Future Feature</CardTitle>
+              <Badge variant="secondary">Coming Soon</Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Additional SEWAi features and analytics will appear here as they are developed.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SEWAi Metrics Dashboard",
-  description: "Analytics dashboard for SEWAi PostHog events",
+  title: "SEWAi Analytics Hub",
+  description: "Analytics dashboard for SEWAi features",
 };
 
 export default function RootLayout({
@@ -31,11 +31,14 @@ export default function RootLayout({
         <header className="border-b">
           <div className="mx-auto max-w-7xl px-4 py-4 flex items-center gap-6">
             <Link href="/" className="text-lg font-bold">
-              SEWAi Metrics
+              SEWAi Analytics
             </Link>
             <nav className="flex gap-4 text-sm text-muted-foreground">
               <Link href="/" className="hover:text-foreground transition-colors">
-                Dashboard
+                Hub
+              </Link>
+              <Link href="/monologue-v2/" className="hover:text-foreground transition-colors">
+                Monologue v2
               </Link>
             </nav>
           </div>
