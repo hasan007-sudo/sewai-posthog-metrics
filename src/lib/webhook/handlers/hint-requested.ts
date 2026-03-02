@@ -29,8 +29,6 @@ export async function handleHintRequested(
   await prisma.hintUsage.create({
     data: {
       sessionId: session.id,
-      activityId: props.activity_id,
-      studentId,
       questionId: props.question_id ?? null,
       questionText: props.question_text ?? null,
       requestedAt: new Date(timestamp),

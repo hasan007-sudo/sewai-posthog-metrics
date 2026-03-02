@@ -47,19 +47,10 @@ export async function handleQuestionCompleted(
     },
     create: {
       sessionId: session.id,
-      activityId: props.activity_id,
       questionId,
       questionText: props.question_text ?? null,
       completedAt: new Date(timestamp),
       attemptNumber: props.attempt_number ?? 1,
-    },
-  });
-
-  // Increment completedCount on the session
-  await prisma.session.update({
-    where: { id: session.id },
-    data: {
-      completedCount: { increment: 1 },
     },
   });
 }

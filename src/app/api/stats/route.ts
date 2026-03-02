@@ -9,71 +9,52 @@ export async function GET() {
       startedCount,
       endedCount,
       abandonedCount,
-      questionsAgg,
-      endedSessionsAgg,
+      totalQuestionsCompleted,
       totalNextActivityClicks,
       totalHintUsages,
       recentSessions,
     ] = await Promise.all([
-      // Total students
       prisma.student.count(),
-
-      // Total sessions
       prisma.session.count(),
-
-      // Sessions by status
       prisma.session.count({ where: { status: "STARTED" } }),
       prisma.session.count({ where: { status: "ENDED" } }),
       prisma.session.count({ where: { status: "ABANDONED" } }),
-
-      // Total questions completed (sum of all completedCount)
-      prisma.session.aggregate({
-        _sum: { completedCount: true },
-      }),
-
-      // Avg questions per session and avg completion rate for ENDED sessions
-      prisma.session.aggregate({
-        where: { status: "ENDED" },
-        _avg: { completedCount: true },
-      }),
-
-      // Total next activity clicks
+      prisma.questionProgress.count(),
       prisma.nextActivityClick.count(),
-
-      // Total hint usages
       prisma.hintUsage.count(),
-
-      // Recent activity: last 10 sessions with student and activity info
       prisma.session.findMany({
         take: 10,
         orderBy: { startedAt: "desc" },
         include: {
           student: { select: { id: true, email: true, name: true } },
           activity: { select: { id: true, title: true, externalId: true } },
+          _count: { select: { questionProgress: true } },
         },
       }),
     ]);
 
-    // Compute average completion rate for ENDED sessions with questionCount > 0
     const endedWithQuestions = await prisma.session.findMany({
       where: {
         status: "ENDED",
-        questionCount: { gt: 0 },
+        activity: { questionCount: { gt: 0 } },
       },
       select: {
-        completedCount: true,
-        questionCount: true,
+        activity: { select: { questionCount: true } },
+        _count: { select: { questionProgress: true } },
       },
     });
 
     const avgCompletionRate =
       endedWithQuestions.length > 0
         ? endedWithQuestions.reduce(
-            (sum: number, s: { completedCount: number; questionCount: number }) =>
-              sum + s.completedCount / s.questionCount,
+            (sum, s) =>
+              sum + s._count.questionProgress / s.activity!.questionCount,
             0
           ) / endedWithQuestions.length
         : 0;
+
+    const avgQuestionsPerSession =
+      endedCount > 0 ? totalQuestionsCompleted / endedCount : 0;
 
     return NextResponse.json({
       totalStudents,
@@ -83,9 +64,9 @@ export async function GET() {
         ENDED: endedCount,
         ABANDONED: abandonedCount,
       },
-      totalQuestionsCompleted: questionsAgg._sum.completedCount ?? 0,
-      avgQuestionsPerSession: endedSessionsAgg._avg.completedCount ?? 0,
-      avgCompletionRate: Math.round(avgCompletionRate * 10000) / 100, // percentage with 2 decimals
+      totalQuestionsCompleted,
+      avgQuestionsPerSession: Math.round(avgQuestionsPerSession * 100) / 100,
+      avgCompletionRate: Math.round(avgCompletionRate * 10000) / 100,
       totalNextActivityClicks,
       totalHintUsages,
       recentActivity: recentSessions,

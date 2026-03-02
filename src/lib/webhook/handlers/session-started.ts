@@ -38,17 +38,13 @@ export async function handleSessionStarted(
   // Create session (upsert by roomName to be idempotent)
   await prisma.session.upsert({
     where: { roomName },
-    update: {
-      questionCount: props.question_count ?? 0,
-    },
+    update: {},
     create: {
       roomName,
       studentId,
       activityId: activity.id,
       status: "STARTED",
       startedAt: new Date(timestamp),
-      questionCount: props.question_count ?? 0,
-      completedCount: 0,
     },
   });
 }

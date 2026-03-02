@@ -15,29 +15,10 @@ export async function GET(
           orderBy: { startedAt: "desc" },
           include: {
             activity: {
-              select: { id: true, title: true, externalId: true },
+              select: { id: true, title: true, externalId: true, questionCount: true },
             },
+            _count: { select: { questionProgress: true } },
           },
-        },
-        hintUsages: {
-          select: {
-            id: true,
-            questionId: true,
-            questionText: true,
-            hintText: true,
-            agentResponse: true,
-            userResponse: true,
-            requestedAt: true,
-            revealedAt: true,
-            respondedAt: true,
-            session: {
-              select: { roomName: true },
-            },
-            activity: {
-              select: { id: true, title: true },
-            },
-          },
-          orderBy: { requestedAt: "desc" },
         },
       },
     });
@@ -49,23 +30,34 @@ export async function GET(
       );
     }
 
+    // Fetch hint usages through sessions (no direct Student.hintUsages relation)
+    const hintUsages = await prisma.hintUsage.findMany({
+      where: { session: { studentId: id } },
+      orderBy: { requestedAt: "desc" },
+      include: {
+        session: { select: { roomName: true } },
+      },
+    });
+
     type SessionRow = (typeof student.sessions)[number];
 
     // Compute totals
     const totalSessions = student.sessions.length;
     const totalQuestions = student.sessions.reduce(
-      (sum: number, s: SessionRow) => sum + s.completedCount,
+      (sum: number, s: SessionRow) => sum + s._count.questionProgress,
       0
     );
 
     const endedWithQuestions = student.sessions.filter(
-      (s: SessionRow) => s.status === "ENDED" && s.questionCount > 0
+      (s: SessionRow) =>
+        s.status === "ENDED" && (s.activity?.questionCount ?? 0) > 0
     );
     const avgCompletionRate =
       endedWithQuestions.length > 0
         ? endedWithQuestions.reduce(
             (sum: number, s: SessionRow) =>
-              sum + s.completedCount / s.questionCount,
+              sum +
+              s._count.questionProgress / (s.activity?.questionCount ?? 1),
             0
           ) / endedWithQuestions.length
         : 0;
@@ -77,8 +69,8 @@ export async function GET(
       status: s.status,
       startedAt: s.startedAt,
       endedAt: s.endedAt,
-      questionCount: s.questionCount,
-      completedCount: s.completedCount,
+      questionCount: s.activity?.questionCount ?? 0,
+      completedCount: s._count.questionProgress,
       durationMs: s.durationMs,
     }));
 
@@ -95,7 +87,7 @@ export async function GET(
         totalQuestions,
         avgCompletionRate: Math.round(avgCompletionRate * 10000) / 100,
       },
-      hintUsages: student.hintUsages,
+      hintUsages,
     });
   } catch (error) {
     console.error("Failed to fetch student detail:", error);

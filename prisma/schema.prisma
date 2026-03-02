@@ -12,15 +12,13 @@ datasource db {
 // ============================================
 
 model Activity {
-  id               String             @id @default(cuid())
-  externalId       String             @unique
-  title            String
-  questionCount    Int                @default(0)
-  sessions         Session[]
-  questionProgress QuestionProgress[]
-  hintUsages       HintUsage[]
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  id            String    @id @default(cuid())
+  externalId    String    @unique
+  title         String
+  questionCount Int       @default(0)
+  sessions      Session[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([externalId])
 }
@@ -31,7 +29,6 @@ model Student {
   name               String?
   sessions           Session[]
   nextActivityClicks NextActivityClick[]
-  hintUsages         HintUsage[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
@@ -50,9 +47,6 @@ model Session {
   startedAt        DateTime
   endedAt          DateTime?
   durationMs       Int?
-
-  questionCount    Int                @default(0)
-  completedCount   Int                @default(0)
 
   questionProgress QuestionProgress[]
   hintUsages       HintUsage[]
@@ -79,22 +73,19 @@ enum SessionStatus {
 // ============================================
 
 model QuestionProgress {
-  id            String   @id @default(cuid())
-  sessionId     String
-  session       Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  activityId    String
-  activity      Activity @relation(fields: [activityId], references: [id])
+  id                 String   @id @default(cuid())
+  sessionId          String
+  session            Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
-  questionId    String
-  questionText  String?
-  completedAt   DateTime
-  attemptNumber Int      @default(1)
+  questionId         String
+  questionText       String?
+  completedAt        DateTime
+  attemptNumber      Int      @default(1)
 
-  createdAt     DateTime @default(now())
+  createdAt          DateTime @default(now())
 
   @@unique([sessionId, questionId])
   @@index([sessionId])
-  @@index([activityId])
   @@index([completedAt])
 }
 
@@ -119,32 +110,26 @@ model NextActivityClick {
 // ============================================
 
 model HintUsage {
-  id              String    @id @default(cuid())
-  sessionId       String
-  session         Session   @relation(fields: [sessionId], references: [id])
-  activityId      String
-  activity        Activity  @relation(fields: [activityId], references: [id])
-  studentId       String
-  student         Student   @relation(fields: [studentId], references: [id])
+  id                 String    @id @default(cuid())
+  sessionId          String
+  session            Session   @relation(fields: [sessionId], references: [id])
 
-  questionId      String?
-  questionText    String?
+  questionId         String?
+  questionText       String?
 
-  hintText        String?
-  agentResponse   String?
-  cached          Boolean   @default(false)
+  hintText           String?
+  agentResponse      String?
+  cached             Boolean   @default(false)
 
-  userResponse    String?
-  respondedAt     DateTime?
+  userResponse       String?
+  respondedAt        DateTime?
 
-  requestedAt     DateTime
-  revealedAt      DateTime?
+  requestedAt        DateTime
+  revealedAt         DateTime?
 
-  createdAt       DateTime  @default(now())
+  createdAt          DateTime  @default(now())
 
   @@index([sessionId])
-  @@index([activityId])
-  @@index([studentId])
   @@index([requestedAt])
 }
 

@@ -45,6 +45,7 @@ export default async function SessionDetailPage({
       questionProgress: { orderBy: { completedAt: "asc" } },
       hintUsages: { orderBy: { requestedAt: "asc" } },
       rawEvents: { orderBy: { timestamp: "asc" } },
+      _count: { select: { questionProgress: true } },
     },
   });
 
@@ -59,9 +60,11 @@ export default async function SessionDetailPage({
         new Date(session.startedAt).getTime()
       : null);
 
+  const completedCount = session._count.questionProgress;
+  const questionCount = session.activity?.questionCount ?? 0;
   const completionPct =
-    session.questionCount > 0
-      ? Math.round((session.completedCount / session.questionCount) * 100)
+    questionCount > 0
+      ? Math.round((completedCount / questionCount) * 100)
       : 0;
 
   const questions = session.questionProgress.map((q) => ({
@@ -128,7 +131,7 @@ export default async function SessionDetailPage({
           <CardContent>
             <div className="text-2xl font-bold">{completionPct}%</div>
             <p className="text-xs text-muted-foreground">
-              {session.completedCount}/{session.questionCount} questions
+              {completedCount}/{questionCount} questions
             </p>
           </CardContent>
         </Card>

@@ -23,14 +23,8 @@ export default async function StudentDetailPage({
       sessions: {
         orderBy: { startedAt: "desc" },
         include: {
-          activity: { select: { id: true, title: true } },
-        },
-      },
-      hintUsages: {
-        orderBy: { requestedAt: "desc" },
-        include: {
-          session: { select: { roomName: true } },
-          activity: { select: { id: true, title: true } },
+          activity: { select: { id: true, title: true, questionCount: true } },
+          _count: { select: { questionProgress: true } },
         },
       },
     },
@@ -40,18 +34,24 @@ export default async function StudentDetailPage({
     notFound();
   }
 
+  const hintUsageRows = await prisma.hintUsage.findMany({
+    where: { session: { studentId: id } },
+    orderBy: { requestedAt: "desc" },
+    include: { session: { select: { roomName: true } } },
+  });
+
   const totalSessions = student.sessions.length;
   const totalQuestions = student.sessions.reduce(
-    (sum, s) => sum + s.completedCount,
+    (sum, s) => sum + s._count.questionProgress,
     0
   );
   const endedWithQuestions = student.sessions.filter(
-    (s) => s.status === "ENDED" && s.questionCount > 0
+    (s) => s.status === "ENDED" && (s.activity?.questionCount ?? 0) > 0
   );
   const avgCompletionRate =
     endedWithQuestions.length > 0
       ? endedWithQuestions.reduce(
-          (sum, s) => sum + s.completedCount / s.questionCount,
+          (sum, s) => sum + s._count.questionProgress / s.activity!.questionCount,
           0
         ) / endedWithQuestions.length
       : 0;
@@ -63,12 +63,12 @@ export default async function StudentDetailPage({
     status: s.status,
     startedAt: s.startedAt.toISOString(),
     endedAt: s.endedAt?.toISOString() || null,
-    questionCount: s.questionCount,
-    completedCount: s.completedCount,
+    questionCount: s.activity?.questionCount ?? 0,
+    completedCount: s._count.questionProgress,
     durationMs: s.durationMs,
   }));
 
-  const hintUsages = student.hintUsages.map((h) => ({
+  const hintUsages = hintUsageRows.map((h) => ({
     id: h.id,
     questionId: h.questionId,
     questionText: h.questionText,

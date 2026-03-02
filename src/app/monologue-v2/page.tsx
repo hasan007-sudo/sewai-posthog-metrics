@@ -11,8 +11,7 @@ async function getStats() {
     startedCount,
     endedCount,
     abandonedCount,
-    questionsAgg,
-    endedSessionsAgg,
+    totalQuestionsCompleted,
     totalNextActivityClicks,
     totalHintUsages,
   ] = await Promise.all([
@@ -21,27 +20,30 @@ async function getStats() {
     prisma.session.count({ where: { status: "STARTED" } }),
     prisma.session.count({ where: { status: "ENDED" } }),
     prisma.session.count({ where: { status: "ABANDONED" } }),
-    prisma.session.aggregate({ _sum: { completedCount: true } }),
-    prisma.session.aggregate({
-      where: { status: "ENDED" },
-      _avg: { completedCount: true },
-    }),
+    prisma.questionProgress.count(),
     prisma.nextActivityClick.count(),
     prisma.hintUsage.count(),
   ]);
 
   const endedWithQuestions = await prisma.session.findMany({
-    where: { status: "ENDED", questionCount: { gt: 0 } },
-    select: { completedCount: true, questionCount: true },
+    where: { status: "ENDED", activity: { questionCount: { gt: 0 } } },
+    select: {
+      activity: { select: { questionCount: true } },
+      _count: { select: { questionProgress: true } },
+    },
   });
 
   const avgCompletionRate =
     endedWithQuestions.length > 0
       ? endedWithQuestions.reduce(
-          (sum, s) => sum + s.completedCount / s.questionCount,
+          (sum, s) =>
+            sum + s._count.questionProgress / s.activity!.questionCount,
           0
         ) / endedWithQuestions.length
       : 0;
+
+  const avgQuestionsPerSession =
+    endedCount > 0 ? totalQuestionsCompleted / endedCount : 0;
 
   return {
     totalStudents,
@@ -51,8 +53,8 @@ async function getStats() {
       ENDED: endedCount,
       ABANDONED: abandonedCount,
     },
-    totalQuestionsCompleted: questionsAgg._sum.completedCount ?? 0,
-    avgQuestionsPerSession: endedSessionsAgg._avg.completedCount ?? 0,
+    totalQuestionsCompleted,
+    avgQuestionsPerSession: Math.round(avgQuestionsPerSession * 100) / 100,
     avgCompletionRate: Math.round(avgCompletionRate * 10000) / 100,
     totalNextActivityClicks,
     totalHintUsages,
@@ -63,9 +65,11 @@ async function getStudents() {
   const students = await prisma.student.findMany({
     include: {
       sessions: {
-        select: { completedCount: true, startedAt: true },
+        select: {
+          startedAt: true,
+          _count: { select: { questionProgress: true, hintUsages: true } },
+        },
       },
-      hintUsages: { select: { id: true } },
     },
     orderBy: { updatedAt: "desc" },
   });
@@ -73,7 +77,7 @@ async function getStudents() {
   return students.map((student) => {
     const sessionCount = student.sessions.length;
     const totalQuestionsCompleted = student.sessions.reduce(
-      (sum, s) => sum + s.completedCount,
+      (sum, s) => sum + s._count.questionProgress,
       0
     );
     const avgQuestionsPerSession =
@@ -85,6 +89,10 @@ async function getStudents() {
             student.sessions[0].startedAt
           )
         : student.createdAt;
+    const hintUsageCount = student.sessions.reduce(
+      (sum, s) => sum + s._count.hintUsages,
+      0
+    );
 
     return {
       id: student.id,
@@ -94,7 +102,7 @@ async function getStudents() {
       totalQuestionsCompleted,
       avgQuestionsPerSession: Math.round(avgQuestionsPerSession * 100) / 100,
       lastActiveDate: lastActiveDate.toISOString(),
-      hintUsageCount: student.hintUsages.length,
+      hintUsageCount,
     };
   });
 }

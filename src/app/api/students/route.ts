@@ -21,13 +21,10 @@ export async function GET(request: NextRequest) {
         sessions: {
           select: {
             id: true,
-            completedCount: true,
             startedAt: true,
             status: true,
+            _count: { select: { questionProgress: true, hintUsages: true } },
           },
-        },
-        hintUsages: {
-          select: { id: true },
         },
       },
       orderBy: { updatedAt: "desc" },
@@ -40,7 +37,7 @@ export async function GET(request: NextRequest) {
       .map((student: StudentRow) => {
         const sessionCount = student.sessions.length;
         const totalQuestionsCompleted = student.sessions.reduce(
-          (sum: number, s: SessionRow) => sum + s.completedCount,
+          (sum: number, s: SessionRow) => sum + s._count.questionProgress,
           0
         );
         const avgQuestionsPerSession =
@@ -64,7 +61,10 @@ export async function GET(request: NextRequest) {
           avgQuestionsPerSession:
             Math.round(avgQuestionsPerSession * 100) / 100,
           lastActiveDate,
-          hintUsageCount: student.hintUsages.length,
+          hintUsageCount: student.sessions.reduce(
+            (sum: number, s: SessionRow) => sum + s._count.hintUsages,
+            0
+          ),
         };
       })
       .sort(

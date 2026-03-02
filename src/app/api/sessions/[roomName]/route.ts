@@ -22,6 +22,7 @@ export async function GET(
             questionCount: true,
           },
         },
+        _count: { select: { questionProgress: true } },
         questionProgress: {
           orderBy: { completedAt: "asc" },
           select: {
@@ -68,6 +69,10 @@ export async function GET(
       );
     }
 
+    // Derived completion metrics
+    const completedCount = session._count.questionProgress;
+    const questionCount = session.activity?.questionCount ?? 0;
+
     // Computed stats
     const durationMs = session.durationMs ?? (
       session.endedAt
@@ -77,9 +82,9 @@ export async function GET(
     );
 
     const completionPercentage =
-      session.questionCount > 0
+      questionCount > 0
         ? Math.round(
-            (session.completedCount / session.questionCount) * 10000
+            (completedCount / questionCount) * 10000
           ) / 100
         : 0;
 
@@ -90,8 +95,8 @@ export async function GET(
         status: session.status,
         startedAt: session.startedAt,
         endedAt: session.endedAt,
-        questionCount: session.questionCount,
-        completedCount: session.completedCount,
+        questionCount,
+        completedCount,
         durationMs,
       },
       student: session.student,

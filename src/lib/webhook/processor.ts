@@ -16,7 +16,7 @@ type EventHandler = (
   timestamp: string,
 ) => Promise<void>;
 
-const EVENT_HANDLERS: Record<string, EventHandler> = {
+export const EVENT_HANDLERS: Record<string, EventHandler> = {
   monologue_session_started: handleSessionStarted,
   monologue_session_end_clicked: handleSessionEnded,
   monologue_question_completed: handleQuestionCompleted,
