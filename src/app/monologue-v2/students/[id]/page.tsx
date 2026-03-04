@@ -23,7 +23,9 @@ export default async function StudentDetailPage({
       sessions: {
         orderBy: { startedAt: "desc" },
         include: {
-          activity: { select: { id: true, title: true, questionCount: true } },
+          activity: {
+            select: { id: true, title: true, externalId: true, questionCount: true },
+          },
           _count: { select: { questionProgress: true } },
         },
       },
@@ -51,7 +53,8 @@ export default async function StudentDetailPage({
   const avgCompletionRate =
     endedWithQuestions.length > 0
       ? endedWithQuestions.reduce(
-          (sum, s) => sum + s._count.questionProgress / s.activity!.questionCount,
+          (sum, s) =>
+            sum + s._count.questionProgress / (s.activity?.questionCount ?? 1),
           0
         ) / endedWithQuestions.length
       : 0;

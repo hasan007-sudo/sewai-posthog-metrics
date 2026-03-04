@@ -1,12 +1,27 @@
 import type { PrismaClient } from "@/generated/prisma/client";
 import type { QuestionCompletedProperties } from "@/types/posthog";
 
+function toPositiveInteger(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const parsed = Math.trunc(value);
+    return parsed > 0 ? parsed : null;
+  }
+
+  if (typeof value === "string" && /^[0-9]+$/.test(value)) {
+    const parsed = Number.parseInt(value, 10);
+    return parsed > 0 ? parsed : null;
+  }
+
+  return null;
+}
+
 export async function handleQuestionCompleted(
   prisma: PrismaClient,
   studentId: string,
   properties: Record<string, unknown>,
   timestamp: string
 ): Promise<void> {
+  void studentId;
   const props = properties as unknown as QuestionCompletedProperties;
 
   const roomName = props.room_name;
@@ -30,6 +45,21 @@ export async function handleQuestionCompleted(
   if (!questionId) {
     console.warn("[question-completed] Missing question_id, skipping");
     return;
+  }
+
+  // Canonical source for total questions after session starts:
+  // question_completed.total_count from SEWAI events.
+  const totalCount = toPositiveInteger(props.total_count);
+  if (session.activityId && totalCount !== null) {
+    await prisma.activity.updateMany({
+      where: {
+        id: session.activityId,
+        questionCount: { lt: totalCount },
+      },
+      data: {
+        questionCount: totalCount,
+      },
+    });
   }
 
   // Upsert to handle duplicate events for the same question

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { StatsCards } from "@/components/dashboard/StatsCards";
 import { StudentTable } from "@/components/dashboard/StudentTable";
+import { SessionMetricsTable } from "@/components/dashboard/SessionMetricsTable";
 
 export const dynamic = "force-dynamic";
 
@@ -61,54 +62,8 @@ async function getStats() {
   };
 }
 
-async function getStudents() {
-  const students = await prisma.student.findMany({
-    include: {
-      sessions: {
-        select: {
-          startedAt: true,
-          _count: { select: { questionProgress: true, hintUsages: true } },
-        },
-      },
-    },
-    orderBy: { updatedAt: "desc" },
-  });
-
-  return students.map((student) => {
-    const sessionCount = student.sessions.length;
-    const totalQuestionsCompleted = student.sessions.reduce(
-      (sum, s) => sum + s._count.questionProgress,
-      0
-    );
-    const avgQuestionsPerSession =
-      sessionCount > 0 ? totalQuestionsCompleted / sessionCount : 0;
-    const lastActiveDate =
-      student.sessions.length > 0
-        ? student.sessions.reduce(
-            (latest, s) => (s.startedAt > latest ? s.startedAt : latest),
-            student.sessions[0].startedAt
-          )
-        : student.createdAt;
-    const hintUsageCount = student.sessions.reduce(
-      (sum, s) => sum + s._count.hintUsages,
-      0
-    );
-
-    return {
-      id: student.id,
-      email: student.email,
-      name: student.name,
-      sessionCount,
-      totalQuestionsCompleted,
-      avgQuestionsPerSession: Math.round(avgQuestionsPerSession * 100) / 100,
-      lastActiveDate: lastActiveDate.toISOString(),
-      hintUsageCount,
-    };
-  });
-}
-
 export default async function MonologueDashboardPage() {
-  const [stats, students] = await Promise.all([getStats(), getStudents()]);
+  const stats = await getStats();
 
   return (
     <div className="space-y-8">
@@ -122,8 +77,13 @@ export default async function MonologueDashboardPage() {
       <StatsCards stats={stats} />
 
       <div>
+        <h2 className="text-lg font-semibold mb-4">Sessions</h2>
+        <SessionMetricsTable />
+      </div>
+
+      <div>
         <h2 className="text-lg font-semibold mb-4">Students</h2>
-        <StudentTable students={students} />
+        <StudentTable />
       </div>
     </div>
   );

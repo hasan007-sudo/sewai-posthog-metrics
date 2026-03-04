@@ -8,6 +8,8 @@ import { handleNextActivity } from "./handlers/next-activity";
 import { handleHintRequested } from "./handlers/hint-requested";
 import { handleHintRevealed } from "./handlers/hint-revealed";
 import { handleHintResponse } from "./handlers/hint-response";
+import { handleTranslateClicked } from "./handlers/translate-clicked";
+import { syncSessionDerivedMetrics } from "./session-derived-metrics";
 
 type EventHandler = (
   prisma: PrismaClient,
@@ -20,6 +22,7 @@ export const EVENT_HANDLERS: Record<string, EventHandler> = {
   monologue_session_started: handleSessionStarted,
   monologue_session_end_clicked: handleSessionEnded,
   monologue_question_completed: handleQuestionCompleted,
+  monologue_translate_clicked: handleTranslateClicked,
   next_activity_clicked: handleNextActivity,
   hint_requested: handleHintRequested,
   hint_revealed: handleHintRevealed,
@@ -85,15 +88,16 @@ export async function processWebhookEvent(
     // 4. Link raw event to session if room_name is present
     const roomName = properties.room_name as string | undefined;
     if (roomName) {
-      const session = await prisma.session.findUnique({
-        where: { roomName },
-        select: { id: true },
+      const sessionId = await syncSessionDerivedMetrics(prisma, {
+        roomName,
+        eventType: event,
+        properties,
       });
 
-      if (session) {
+      if (sessionId) {
         await prisma.rawEvent.update({
           where: { id: rawEvent.id },
-          data: { sessionId: session.id },
+          data: { sessionId },
         });
       }
     }

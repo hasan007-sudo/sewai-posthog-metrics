@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { EVENT_HANDLERS } from "@/lib/webhook/processor";
+import { syncSessionDerivedMetrics } from "@/lib/webhook/session-derived-metrics";
 
 export async function POST() {
   const unprocessed = await prisma.rawEvent.findMany({
@@ -43,16 +44,23 @@ export async function POST() {
       // Link to session if room_name present
       const roomName = properties.room_name as string | undefined;
       if (roomName && !raw.sessionId) {
-        const session = await prisma.session.findUnique({
-          where: { roomName },
-          select: { id: true },
+        const sessionId = await syncSessionDerivedMetrics(prisma, {
+          roomName,
+          eventType: raw.eventType,
+          properties,
         });
-        if (session) {
+        if (sessionId) {
           await prisma.rawEvent.update({
             where: { id: raw.id },
-            data: { sessionId: session.id },
+            data: { sessionId },
           });
         }
+      } else if (roomName) {
+        await syncSessionDerivedMetrics(prisma, {
+          roomName,
+          eventType: raw.eventType,
+          properties,
+        });
       }
 
       await prisma.rawEvent.update({

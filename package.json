@@ -7,6 +7,8 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
+    "backfill:activity-question-counts": "node scripts/backfill-activity-question-counts.mjs",
+    "backfill:session-derived-metrics": "node scripts/backfill-session-derived-metrics.mjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {

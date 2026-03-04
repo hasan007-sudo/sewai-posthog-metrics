@@ -25,13 +25,6 @@ interface HintUsage {
   respondedAt: string | null;
 }
 
-interface RawEvent {
-  id: string;
-  eventType: string;
-  timestamp: string;
-  properties: Record<string, unknown>;
-}
-
 export function QuestionTimeline({ questions }: { questions: QuestionProgress[] }) {
   if (questions.length === 0) {
     return <p className="text-sm text-muted-foreground">No questions completed.</p>;
@@ -120,38 +113,6 @@ export function HintTimeline({ hints }: { hints: HintUsage[] }) {
             </div>
           </CardContent>
         </Card>
-      ))}
-    </div>
-  );
-}
-
-export function RawEventTimeline({ events }: { events: RawEvent[] }) {
-  if (events.length === 0) {
-    return <p className="text-sm text-muted-foreground">No events recorded.</p>;
-  }
-
-  const eventColors: Record<string, string> = {
-    monologue_session_started: "bg-green-500",
-    monologue_session_end_clicked: "bg-red-500",
-    monologue_question_completed: "bg-blue-500",
-    next_activity_clicked: "bg-purple-500",
-    hint_requested: "bg-yellow-500",
-    hint_revealed: "bg-yellow-600",
-    hint_followed_by_response: "bg-orange-500",
-  };
-
-  return (
-    <div className="space-y-1">
-      {events.map((event) => (
-        <div key={event.id} className="flex items-center gap-3 py-1.5 text-sm">
-          <span className="text-xs text-muted-foreground font-mono w-16">
-            {format(new Date(event.timestamp), "HH:mm:ss")}
-          </span>
-          <div
-            className={`w-2 h-2 rounded-full ${eventColors[event.eventType] || "bg-gray-400"}`}
-          />
-          <span className="font-mono text-xs">{event.eventType}</span>
-        </div>
       ))}
     </div>
   );

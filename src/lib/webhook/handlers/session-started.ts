@@ -1,5 +1,20 @@
 import type { PrismaClient } from "@/generated/prisma/client";
 import type { SessionStartedProperties } from "@/types/posthog";
+import { fetchSewaiActivityMetadata } from "@/lib/sewai-prisma";
+
+function toPositiveInteger(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const parsed = Math.trunc(value);
+    return parsed > 0 ? parsed : null;
+  }
+
+  if (typeof value === "string" && /^[0-9]+$/.test(value)) {
+    const parsed = Number.parseInt(value, 10);
+    return parsed > 0 ? parsed : null;
+  }
+
+  return null;
+}
 
 export async function handleSessionStarted(
   prisma: PrismaClient,
@@ -21,19 +36,41 @@ export async function handleSessionStarted(
     return;
   }
 
+  let validQuestionCount = toPositiveInteger(props.question_count);
+
+  // SEWAI currently sends activity name but question_count can be 0 on session start.
+  // Fall back to SEWAI activity config so we still persist questionCount in Activity.
+  if (validQuestionCount === null) {
+    const sewaiMetadata = await fetchSewaiActivityMetadata([activityExternalId]);
+    const configuredQuestionCount =
+      sewaiMetadata.get(activityExternalId)?.configuredQuestionCount ?? 0;
+    validQuestionCount = configuredQuestionCount > 0 ? configuredQuestionCount : null;
+  }
+
   // Upsert the activity
   const activity = await prisma.activity.upsert({
     where: { externalId: activityExternalId },
     update: {
       title: props.activity_title ?? "",
-      questionCount: props.question_count ?? 0,
     },
     create: {
       externalId: activityExternalId,
       title: props.activity_title ?? "",
-      questionCount: props.question_count ?? 0,
+      questionCount: validQuestionCount ?? 0,
     },
   });
+
+  if (validQuestionCount !== null) {
+    await prisma.activity.updateMany({
+      where: {
+        id: activity.id,
+        questionCount: { lt: validQuestionCount },
+      },
+      data: {
+        questionCount: validQuestionCount,
+      },
+    });
+  }
 
   // Create session (upsert by roomName to be idempotent)
   await prisma.session.upsert({

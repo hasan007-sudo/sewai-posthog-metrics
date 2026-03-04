@@ -48,17 +48,6 @@ export async function GET(
             respondedAt: true,
           },
         },
-        rawEvents: {
-          orderBy: { timestamp: "asc" },
-          select: {
-            id: true,
-            eventType: true,
-            distinctId: true,
-            properties: true,
-            timestamp: true,
-            processed: true,
-          },
-        },
       },
     });
 
@@ -98,12 +87,13 @@ export async function GET(
         questionCount,
         completedCount,
         durationMs,
+        translatedClicksEvents: session.translatedClicksEvents,
+        orgName: session.orgName,
       },
       student: session.student,
       activity: session.activity,
       questionProgress: session.questionProgress,
       hintUsages: session.hintUsages,
-      rawEvents: session.rawEvents,
       computed: {
         durationMs,
         completionPercentage,

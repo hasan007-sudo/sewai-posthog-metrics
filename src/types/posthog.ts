@@ -50,6 +50,7 @@ export interface QuestionCompletedProperties {
   question_id: string;
   question_text?: string;
   attempt_number?: number;
+  total_count?: number;
 }
 
 export interface NextActivityProperties {

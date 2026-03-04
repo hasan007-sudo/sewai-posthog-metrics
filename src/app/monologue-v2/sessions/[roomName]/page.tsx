@@ -5,7 +5,6 @@ import { prisma } from "@/lib/prisma";
 import {
   QuestionTimeline,
   HintTimeline,
-  RawEventTimeline,
 } from "@/components/dashboard/EventTimeline";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -44,7 +43,6 @@ export default async function SessionDetailPage({
       },
       questionProgress: { orderBy: { completedAt: "asc" } },
       hintUsages: { orderBy: { requestedAt: "asc" } },
-      rawEvents: { orderBy: { timestamp: "asc" } },
       _count: { select: { questionProgress: true } },
     },
   });
@@ -86,13 +84,6 @@ export default async function SessionDetailPage({
     requestedAt: h.requestedAt.toISOString(),
     revealedAt: h.revealedAt?.toISOString() || null,
     respondedAt: h.respondedAt?.toISOString() || null,
-  }));
-
-  const rawEvents = session.rawEvents.map((e) => ({
-    id: e.id,
-    eventType: e.eventType,
-    timestamp: e.timestamp.toISOString(),
-    properties: e.properties as Record<string, unknown>,
   }));
 
   return (
@@ -153,14 +144,6 @@ export default async function SessionDetailPage({
             <div className="text-2xl font-bold">{hints.length}</div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Events</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{rawEvents.length}</div>
-          </CardContent>
-        </Card>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -172,11 +155,6 @@ export default async function SessionDetailPage({
           <h2 className="text-lg font-semibold mb-4">Hints</h2>
           <HintTimeline hints={hints} />
         </div>
-      </div>
-
-      <div>
-        <h2 className="text-lg font-semibold mb-4">Event Log</h2>
-        <RawEventTimeline events={rawEvents} />
       </div>
     </div>
   );

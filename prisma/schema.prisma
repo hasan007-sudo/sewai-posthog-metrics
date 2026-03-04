@@ -42,6 +42,8 @@ model Session {
   student          Student            @relation(fields: [studentId], references: [id])
   activityId       String?
   activity         Activity?          @relation(fields: [activityId], references: [id])
+  translatedClicksEvents Int          @default(0)
+  orgName          String             @default("unknown")
 
   status           SessionStatus      @default(STARTED)
   startedAt        DateTime
@@ -58,6 +60,7 @@ model Session {
   @@index([studentId])
   @@index([activityId])
   @@index([roomName])
+  @@index([orgName])
   @@index([status])
   @@index([startedAt])
 }
