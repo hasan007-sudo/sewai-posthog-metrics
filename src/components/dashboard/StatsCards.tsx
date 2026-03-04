@@ -1,7 +1,17 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, BookOpen, CheckCircle, MousePointerClick, Lightbulb, BarChart3 } from "lucide-react";
+import {
+  Users,
+  BookOpen,
+  CheckCircle,
+  Lightbulb,
+  CircleCheckBig,
+  Clock3,
+  Languages,
+  Trophy,
+  AlertCircle,
+} from "lucide-react";
 
 interface Stats {
   totalStudents: number;
@@ -9,9 +19,15 @@ interface Stats {
   sessionsByStatus: { STARTED: number; ENDED: number; ABANDONED: number };
   totalQuestionsCompleted: number;
   avgQuestionsPerSession: number;
-  avgCompletionRate: number;
-  totalNextActivityClicks: number;
   totalHintUsages: number;
+  outcomes: {
+    endedConversations: { count: number; pct: number };
+    notEndedStale: { count: number; pct: number };
+    hintUsedAtLeastOnce: { count: number; pct: number };
+    translateUsedAtLeastOnce: { count: number; pct: number };
+    completedAllAndEnded: { count: number; pct: number };
+    endedBeforeQ1Complete: { count: number; pct: number };
+  };
 }
 
 export function StatsCards({ stats }: { stats: Stats }) {
@@ -34,25 +50,50 @@ export function StatsCards({ stats }: { stats: Stats }) {
       icon: CheckCircle,
     },
     {
-      title: "Completion Rate",
-      value: `${stats.avgCompletionRate}%`,
-      description: "Avg for ended sessions",
-      icon: BarChart3,
-    },
-    {
-      title: "Next Activity Clicks",
-      value: stats.totalNextActivityClicks,
-      icon: MousePointerClick,
-    },
-    {
       title: "Hints Used",
       value: stats.totalHintUsages,
       icon: Lightbulb,
     },
+    {
+      title: "Ended Conversations",
+      value: stats.outcomes.endedConversations.count,
+      description: `${stats.outcomes.endedConversations.pct.toFixed(1)}% of started`,
+      icon: CircleCheckBig,
+    },
+    {
+      title: "Not Ended (24h+)",
+      value: stats.outcomes.notEndedStale.count,
+      description: `${stats.outcomes.notEndedStale.pct.toFixed(1)}% of started`,
+      icon: Clock3,
+    },
+    {
+      title: "Hint Used >=1",
+      value: stats.outcomes.hintUsedAtLeastOnce.count,
+      description: `${stats.outcomes.hintUsedAtLeastOnce.pct.toFixed(1)}% of started`,
+      icon: Lightbulb,
+    },
+    {
+      title: "Translate Used >=1",
+      value: stats.outcomes.translateUsedAtLeastOnce.count,
+      description: `${stats.outcomes.translateUsedAtLeastOnce.pct.toFixed(1)}% of started`,
+      icon: Languages,
+    },
+    {
+      title: "Completed All Questions & Ended",
+      value: stats.outcomes.completedAllAndEnded.count,
+      description: `${stats.outcomes.completedAllAndEnded.pct.toFixed(1)}% of started`,
+      icon: Trophy,
+    },
+    {
+      title: "Sessions Ended Before Q1 Complete",
+      value: stats.outcomes.endedBeforeQ1Complete.count,
+      description: `${stats.outcomes.endedBeforeQ1Complete.pct.toFixed(1)}% of started`,
+      icon: AlertCircle,
+    },
   ];
 
   return (
-    <div className="grid gap-4 grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
       {cards.map((card) => (
         <Card key={card.title}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">

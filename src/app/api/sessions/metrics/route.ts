@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { fetchSewaiActivityMetadata } from "@/lib/sewai-prisma";
 
 export interface SessionMetricsRow {
+  status: string;
   translated_clicks_events: number;
   total_questions_of_session: number;
   duration_of_session_ms: number | null;
@@ -18,6 +19,7 @@ export interface SessionMetricsRow {
 }
 
 interface SessionMetricsDbRow {
+  status: string;
   translated_clicks_events: number;
   total_questions_of_session: number;
   duration_of_session_ms: number | null;
@@ -49,6 +51,15 @@ export async function GET() {
         GROUP BY hu."sessionId"
       )
       SELECT
+        CASE
+          WHEN s.status = 'ENDED'
+            OR (
+              COALESCE(a."questionCount", 0) > 0
+              AND COALESCE(qc.questions_completed, 0) >= COALESCE(a."questionCount", 0)
+            )
+            THEN 'ENDED'
+          ELSE s.status::text
+        END AS status,
         COALESCE(s."translatedClicksEvents", 0)::int AS translated_clicks_events,
         COALESCE(a."questionCount", 0)::int AS total_questions_of_session,
         COALESCE(

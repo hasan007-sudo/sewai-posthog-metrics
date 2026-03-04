@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 
 interface SessionMetricsRow {
+  status: string;
   translated_clicks_events: number;
   total_questions_of_session: number;
   duration_of_session_ms: number | null;
@@ -31,6 +32,7 @@ interface SessionMetricsResponse {
 }
 
 const CSV_COLUMNS: (keyof SessionMetricsRow)[] = [
+  "status",
   "translated_clicks_events",
   "total_questions_of_session",
   "duration_of_session_ms",
@@ -101,6 +103,7 @@ function SessionMetricsTableSkeleton() {
         <TableHeader>
           <TableRow>
             <TableHead className="sticky top-0 z-20 bg-background">S.No</TableHead>
+            <TableHead className="sticky top-0 z-20 bg-background">Status</TableHead>
             <TableHead className="sticky top-0 z-20 bg-background">Translated Clicks</TableHead>
             <TableHead className="sticky top-0 z-20 bg-background">Total Questions of Session</TableHead>
             <TableHead className="sticky top-0 z-20 bg-background">Duration</TableHead>
@@ -118,6 +121,7 @@ function SessionMetricsTableSkeleton() {
           {Array.from({ length: LOADING_ROWS }, (_, index) => (
             <TableRow key={`session-skeleton-${index}`}>
               <TableCell>{index + 1}</TableCell>
+              <TableCell><div className="h-4 w-14 animate-pulse rounded bg-muted" /></TableCell>
               <TableCell><div className="h-4 w-8 animate-pulse rounded bg-muted" /></TableCell>
               <TableCell><div className="h-4 w-10 animate-pulse rounded bg-muted" /></TableCell>
               <TableCell><div className="h-4 w-12 animate-pulse rounded bg-muted" /></TableCell>
@@ -293,6 +297,7 @@ export function SessionMetricsTable() {
             <TableHeader>
               <TableRow>
                 <TableHead className="sticky top-0 z-20 bg-background">S.No</TableHead>
+                <TableHead className="sticky top-0 z-20 bg-background">Status</TableHead>
                 <TableHead className="sticky top-0 z-20 bg-background">Translated Clicks</TableHead>
                 <TableHead className="sticky top-0 z-20 bg-background">Total Questions of Session</TableHead>
                 <TableHead className="sticky top-0 z-20 bg-background">Duration</TableHead>
@@ -310,6 +315,7 @@ export function SessionMetricsTable() {
               {filteredRows.map((row, index) => (
                 <TableRow key={row.student_session_id}>
                   <TableCell>{index + 1}</TableCell>
+                  <TableCell>{row.status}</TableCell>
                   <TableCell>{row.translated_clicks_events}</TableCell>
                   <TableCell>
                     {formatTotalQuestions(row.total_questions_of_session)}
