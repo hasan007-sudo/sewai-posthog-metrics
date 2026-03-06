@@ -48,6 +48,7 @@ export async function POST() {
           roomName,
           eventType: raw.eventType,
           properties,
+          eventTimestamp: raw.timestamp.toISOString(),
         });
         if (sessionId) {
           await prisma.rawEvent.update({
@@ -60,6 +61,7 @@ export async function POST() {
           roomName,
           eventType: raw.eventType,
           properties,
+          eventTimestamp: raw.timestamp.toISOString(),
         });
       }
 

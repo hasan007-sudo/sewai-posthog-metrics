@@ -1,13 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { StatsCards } from "@/components/dashboard/StatsCards";
-import { StudentTable } from "@/components/dashboard/StudentTable";
 import { SessionMetricsTable } from "@/components/dashboard/SessionMetricsTable";
-import {
-  ActivityCompletionBarChart,
-  type ActivityCompletionBin,
-} from "@/components/dashboard/ActivityCompletionBarChart";
-import { TopOrgFilter } from "@/components/dashboard/TopOrgFilter";
 
 export const dynamic = "force-dynamic";
 
@@ -18,21 +12,13 @@ interface StatsAggregateRow {
   ended_sessions: number;
   abandoned_sessions: number;
   total_questions_completed: number;
+  total_duration_ms: number | string | bigint;
   total_hint_usages: number;
   not_ended_stale_sessions: number;
   hint_used_sessions: number;
   translate_used_sessions: number;
   completed_all_and_ended_sessions: number;
   ended_before_q1_complete_sessions: number;
-}
-
-interface ActivityCompletionDistributionRow {
-  completion_pct: number;
-  session_count: number;
-}
-
-interface OrgOptionRow {
-  org_name: string;
 }
 
 interface PageProps {
@@ -43,6 +29,30 @@ interface PageProps {
     | {
         org?: string | string[];
       };
+}
+
+const FIXED_ORG_FILTERS = ["FSSA", "DET", "demo"] as const;
+
+interface DashboardStats {
+  totalStudents: number;
+  totalSessions: number;
+  sessionsByStatus: {
+    STARTED: number;
+    ENDED: number;
+    ABANDONED: number;
+  };
+  totalQuestionsCompleted: number;
+  totalDurationMs: number;
+  avgQuestionsPerSession: number;
+  totalHintUsages: number;
+  outcomes: {
+    endedConversations: { count: number; pct: number };
+    notEndedStale: { count: number; pct: number };
+    hintUsedAtLeastOnce: { count: number; pct: number };
+    translateUsedAtLeastOnce: { count: number; pct: number };
+    completedAllAndEnded: { count: number; pct: number };
+    endedBeforeQ1Complete: { count: number; pct: number };
+  };
 }
 
 function toSingleValue(value: string | string[] | undefined): string | null {
@@ -62,7 +72,11 @@ function normalizeOrgFilter(value: string | null): string | null {
     return null;
   }
 
-  return trimmed;
+  const matched = FIXED_ORG_FILTERS.find(
+    (orgName) => orgName.toLowerCase() === trimmed.toLowerCase(),
+  );
+
+  return matched ?? null;
 }
 
 function buildOrgFilterCondition(orgFilter: string | null): Prisma.Sql {
@@ -70,37 +84,84 @@ function buildOrgFilterCondition(orgFilter: string | null): Prisma.Sql {
     return Prisma.sql`TRUE`;
   }
 
-  return Prisma.sql`COALESCE(NULLIF(s."orgName", ''), 'unknown') = ${orgFilter}`;
+  return Prisma.sql`LOWER(COALESCE(NULLIF(s."orgName", ''), 'unknown')) = LOWER(${orgFilter})`;
 }
 
-async function getStats(orgFilter: string | null) {
+function isRetryableConnectionDropError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const maybeError = error as { code?: unknown; message?: unknown; meta?: unknown };
+  const message = typeof maybeError.message === "string" ? maybeError.message : "";
+  const metaText =
+    maybeError.meta && typeof maybeError.meta === "object"
+      ? JSON.stringify(maybeError.meta)
+      : "";
+  const combined = `${message} ${metaText}`.toLowerCase();
+
+  return (
+    maybeError.code === "P2010" &&
+    combined.includes("server has closed the connection")
+  );
+}
+
+async function withTransientQueryRetry<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (!isRetryableConnectionDropError(error)) {
+      throw error;
+    }
+
+    return operation();
+  }
+}
+
+function buildEmptyStats(): DashboardStats {
+  return {
+    totalStudents: 0,
+    totalSessions: 0,
+    sessionsByStatus: {
+      STARTED: 0,
+      ENDED: 0,
+      ABANDONED: 0,
+    },
+    totalQuestionsCompleted: 0,
+    totalDurationMs: 0,
+    avgQuestionsPerSession: 0,
+    totalHintUsages: 0,
+    outcomes: {
+      endedConversations: { count: 0, pct: 0 },
+      notEndedStale: { count: 0, pct: 0 },
+      hintUsedAtLeastOnce: { count: 0, pct: 0 },
+      translateUsedAtLeastOnce: { count: 0, pct: 0 },
+      completedAllAndEnded: { count: 0, pct: 0 },
+      endedBeforeQ1Complete: { count: 0, pct: 0 },
+    },
+  };
+}
+
+async function getStats(orgFilter: string | null): Promise<DashboardStats> {
   const orgFilterCondition = buildOrgFilterCondition(orgFilter);
 
-  const result = await prisma.$queryRaw<StatsAggregateRow[]>`
+  let result: StatsAggregateRow[];
+  try {
+    result = await withTransientQueryRetry(() =>
+      prisma.$queryRaw<StatsAggregateRow[]>`
     WITH filtered_sessions AS (
       SELECT
         s.id,
         s."studentId",
-        s."activityId",
         s.status,
         s."startedAt",
-        s."translatedClicksEvents"
+        COALESCE(s."translatedClicksEvents", 0)::int AS translated_clicks,
+        COALESCE(s."durationMs", 0)::int AS duration_ms,
+        COALESCE(a."questionCount", 0)::int AS question_count
       FROM "Session" s
+      LEFT JOIN "Activity" a
+        ON a.id = s."activityId"
       WHERE ${orgFilterCondition}
-    ),
-    question_counts AS (
-      SELECT
-        qp."sessionId" AS session_id,
-        COUNT(*)::int AS questions_completed
-      FROM "QuestionProgress" qp
-      GROUP BY qp."sessionId"
-    ),
-    hint_counts AS (
-      SELECT
-        hu."sessionId" AS session_id,
-        COUNT(*)::int AS hint_count
-      FROM "HintUsage" hu
-      GROUP BY hu."sessionId"
     ),
     session_rollup AS (
       SELECT
@@ -108,37 +169,40 @@ async function getStats(orgFilter: string | null) {
         fs.status::text AS raw_status,
         fs."startedAt" AS started_at,
         fs."studentId" AS student_id,
-        COALESCE(a."questionCount", 0)::int AS question_count,
+        fs.question_count,
+        fs.duration_ms,
         COALESCE(qc.questions_completed, 0)::int AS questions_completed,
         COALESCE(hc.hint_count, 0)::int AS hint_count,
-        COALESCE(fs."translatedClicksEvents", 0)::int AS translated_clicks,
+        fs.translated_clicks,
         CASE
           WHEN fs.status = 'ENDED'
             OR (
-              COALESCE(a."questionCount", 0) > 0
-              AND COALESCE(qc.questions_completed, 0) >= COALESCE(a."questionCount", 0)
+              fs.question_count > 0
+              AND COALESCE(qc.questions_completed, 0) >= fs.question_count
             )
             THEN 'ENDED'
           ELSE fs.status::text
         END AS effective_status
       FROM filtered_sessions fs
-      LEFT JOIN "Activity" a
-        ON a.id = fs."activityId"
-      LEFT JOIN question_counts qc
-        ON qc.session_id = fs.id
-      LEFT JOIN hint_counts hc
-        ON hc.session_id = fs.id
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*)::int AS questions_completed
+        FROM "QuestionProgress" qp
+        WHERE qp."sessionId" = fs.id
+      ) qc ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*)::int AS hint_count
+        FROM "HintUsage" hu
+        WHERE hu."sessionId" = fs.id
+      ) hc ON TRUE
     )
     SELECT
-      COALESCE(
-        (SELECT COUNT(DISTINCT student_id)::int FROM session_rollup),
-        0
-      )::int AS total_students,
+      COUNT(DISTINCT student_id)::int AS total_students,
       COUNT(*)::int AS total_sessions,
       COUNT(*) FILTER (WHERE effective_status = 'STARTED')::int AS started_sessions,
       COUNT(*) FILTER (WHERE effective_status = 'ENDED')::int AS ended_sessions,
       COUNT(*) FILTER (WHERE effective_status = 'ABANDONED')::int AS abandoned_sessions,
       COALESCE(SUM(questions_completed), 0)::int AS total_questions_completed,
+      COALESCE(SUM(duration_ms), 0)::bigint AS total_duration_ms,
       COALESCE(SUM(hint_count), 0)::int AS total_hint_usages,
       COUNT(*) FILTER (
         WHERE effective_status = 'STARTED'
@@ -156,7 +220,12 @@ async function getStats(orgFilter: string | null) {
           AND questions_completed = 0
       )::int AS ended_before_q1_complete_sessions
     FROM session_rollup
-  `;
+  `,
+    );
+  } catch (error) {
+    console.error("[monologue-v2] getStats query failed", error);
+    return buildEmptyStats();
+  }
 
   const row = result[0];
   const totalSessions = row?.total_sessions ?? 0;
@@ -169,6 +238,12 @@ async function getStats(orgFilter: string | null) {
   const avgQuestionsPerSession =
     endedCount > 0 ? totalQuestionsCompleted / endedCount : 0;
 
+  const rawTotalDurationMs = row?.total_duration_ms ?? 0;
+  const totalDurationMs =
+    typeof rawTotalDurationMs === "number"
+      ? rawTotalDurationMs
+      : Number(rawTotalDurationMs);
+
   return {
     totalStudents: row?.total_students ?? 0,
     totalSessions,
@@ -178,6 +253,7 @@ async function getStats(orgFilter: string | null) {
       ABANDONED: row?.abandoned_sessions ?? 0,
     },
     totalQuestionsCompleted,
+    totalDurationMs: Number.isFinite(totalDurationMs) ? totalDurationMs : 0,
     avgQuestionsPerSession: Math.round(avgQuestionsPerSession * 100) / 100,
     totalHintUsages: row?.total_hint_usages ?? 0,
     outcomes: {
@@ -209,108 +285,40 @@ async function getStats(orgFilter: string | null) {
   };
 }
 
-async function getCompletionDistribution(orgFilter: string | null) {
-  const orgFilterCondition = buildOrgFilterCondition(orgFilter);
-
-  return prisma.$queryRaw<ActivityCompletionDistributionRow[]>`
-    WITH filtered_sessions AS (
-      SELECT
-        s.id,
-        s."activityId"
-      FROM "Session" s
-      WHERE ${orgFilterCondition}
-    ),
-    question_counts AS (
-      SELECT
-        qp."sessionId" AS session_id,
-        COUNT(*)::int AS questions_completed
-      FROM "QuestionProgress" qp
-      GROUP BY qp."sessionId"
-    )
-    SELECT
-      LEAST(
-        100,
-        GREATEST(
-          0,
-          ROUND(
-            (
-              COALESCE(qc.questions_completed, 0)::numeric * 100
-            ) / NULLIF(a."questionCount", 0)
-          )::int
-        )
-      )::int AS completion_pct,
-      COUNT(*)::int AS session_count
-    FROM filtered_sessions fs
-    INNER JOIN "Activity" a
-      ON a.id = fs."activityId"
-    LEFT JOIN question_counts qc
-      ON qc.session_id = fs.id
-    WHERE a."questionCount" > 0
-    GROUP BY 1
-    ORDER BY 1
-  `;
-}
-
-async function getOrgOptions() {
-  const rows = await prisma.$queryRaw<OrgOptionRow[]>`
-    SELECT DISTINCT
-      COALESCE(NULLIF(s."orgName", ''), 'unknown') AS org_name
-    FROM "Session" s
-    ORDER BY org_name ASC
-  `;
-
-  return rows.map((row) => row.org_name);
-}
-
-export default async function MonologueDashboardPage({ searchParams }: PageProps) {
+export default async function MonologueDashboardPage({
+  searchParams,
+}: PageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const selectedOrg = normalizeOrgFilter(toSingleValue(resolvedSearchParams?.org));
+  const selectedOrg = normalizeOrgFilter(
+    toSingleValue(resolvedSearchParams?.org),
+  );
 
-  const [stats, completionDistribution, orgOptions] = await Promise.all([
-    getStats(selectedOrg),
-    getCompletionDistribution(selectedOrg),
-    getOrgOptions(),
-  ]);
-
-  const completionBins: ActivityCompletionBin[] = completionDistribution.map((row) => ({
-    completionPct: row.completion_pct,
-    sessionCount: row.session_count,
-  }));
-
+  const stats = await getStats(selectedOrg);
   const selectedOrgLabel = selectedOrg ?? "All orgs";
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Monologue v2</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Monologue learning analytics overview
-          </p>
-          <p className="text-muted-foreground text-xs mt-2">
-            Top metrics scope: {selectedOrgLabel}
-          </p>
-        </div>
-
-        <TopOrgFilter orgOptions={orgOptions} selectedOrg={selectedOrg} />
+      <div>
+        <h1 className="text-2xl font-bold">Monologue v2</h1>
+        <p className="text-muted-foreground text-sm mt-1">
+          Monologue learning analytics overview
+        </p>
+        <p className="text-muted-foreground text-xs mt-2">
+          Top metrics scope: {selectedOrgLabel}
+        </p>
       </div>
 
       <StatsCards stats={stats} />
 
       <div>
-        <h2 className="text-lg font-semibold mb-4">Activity Completion</h2>
-        <ActivityCompletionBarChart bins={completionBins} />
-      </div>
-
-      <div>
         <h2 className="text-lg font-semibold mb-4">Sessions</h2>
-        <SessionMetricsTable />
+        <SessionMetricsTable selectedOrg={selectedOrg} />
       </div>
 
-      <div>
+      {/* <div>
         <h2 className="text-lg font-semibold mb-4">Students</h2>
         <StudentTable />
-      </div>
+      </div> */}
     </div>
   );
 }

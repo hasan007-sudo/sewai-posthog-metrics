@@ -57,17 +57,23 @@ interface SyncSessionDerivedMetricsInput {
   roomName: string;
   eventType: string;
   properties: Record<string, unknown>;
+  eventTimestamp: string;
 }
 
 export async function syncSessionDerivedMetrics(
   prisma: PrismaClient,
   input: SyncSessionDerivedMetricsInput,
 ): Promise<string | null> {
-  const { roomName, eventType, properties } = input;
+  const { roomName, eventType, properties, eventTimestamp } = input;
 
   const session = await prisma.session.findUnique({
     where: { roomName },
-    select: { id: true },
+    select: {
+      id: true,
+      status: true,
+      startedAt: true,
+      durationMs: true,
+    },
   });
 
   if (!session) {
@@ -76,6 +82,14 @@ export async function syncSessionDerivedMetrics(
 
   const orgSlug = extractOrgSlugFromProperties(properties);
   const shouldIncrementTranslatedClicks = eventType === "monologue_translate_clicked";
+  const parsedEventTimestamp = Date.parse(eventTimestamp);
+  const canAdvanceDuration =
+    session.status !== "ENDED" && !Number.isNaN(parsedEventTimestamp);
+
+  const currentDurationMs = session.durationMs ?? 0;
+  const candidateDurationMs = canAdvanceDuration
+    ? Math.max(0, Math.round(parsedEventTimestamp - session.startedAt.getTime()))
+    : null;
 
   const updateData: Prisma.SessionUpdateInput = {};
   if (orgSlug) {
@@ -83,6 +97,12 @@ export async function syncSessionDerivedMetrics(
   }
   if (shouldIncrementTranslatedClicks) {
     updateData.translatedClicksEvents = { increment: 1 };
+  }
+  if (
+    candidateDurationMs !== null &&
+    candidateDurationMs > currentDurationMs
+  ) {
+    updateData.durationMs = candidateDurationMs;
   }
 
   if (Object.keys(updateData).length > 0) {

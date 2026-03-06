@@ -92,6 +92,7 @@ export async function processWebhookEvent(
         roomName,
         eventType: event,
         properties,
+        eventTimestamp,
       });
 
       if (sessionId) {

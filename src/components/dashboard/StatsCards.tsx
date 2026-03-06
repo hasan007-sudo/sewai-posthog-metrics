@@ -4,13 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Users,
   BookOpen,
-  CheckCircle,
   Lightbulb,
-  CircleCheckBig,
-  Clock3,
   Languages,
-  Trophy,
-  AlertCircle,
+  Timer,
 } from "lucide-react";
 
 interface Stats {
@@ -18,6 +14,7 @@ interface Stats {
   totalSessions: number;
   sessionsByStatus: { STARTED: number; ENDED: number; ABANDONED: number };
   totalQuestionsCompleted: number;
+  totalDurationMs: number;
   avgQuestionsPerSession: number;
   totalHintUsages: number;
   outcomes: {
@@ -28,6 +25,26 @@ interface Stats {
     completedAllAndEnded: { count: number; pct: number };
     endedBeforeQ1Complete: { count: number; pct: number };
   };
+}
+
+function formatDuration(ms: number): string {
+  if (ms <= 0) {
+    return "0s";
+  }
+
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+
+  return `${seconds}s`;
 }
 
 export function StatsCards({ stats }: { stats: Stats }) {
@@ -44,29 +61,6 @@ export function StatsCards({ stats }: { stats: Stats }) {
       icon: BookOpen,
     },
     {
-      title: "Questions Completed",
-      value: stats.totalQuestionsCompleted,
-      description: `${stats.avgQuestionsPerSession.toFixed(1)} avg/session`,
-      icon: CheckCircle,
-    },
-    {
-      title: "Hints Used",
-      value: stats.totalHintUsages,
-      icon: Lightbulb,
-    },
-    {
-      title: "Ended Conversations",
-      value: stats.outcomes.endedConversations.count,
-      description: `${stats.outcomes.endedConversations.pct.toFixed(1)}% of started`,
-      icon: CircleCheckBig,
-    },
-    {
-      title: "Not Ended (24h+)",
-      value: stats.outcomes.notEndedStale.count,
-      description: `${stats.outcomes.notEndedStale.pct.toFixed(1)}% of started`,
-      icon: Clock3,
-    },
-    {
       title: "Hint Used >=1",
       value: stats.outcomes.hintUsedAtLeastOnce.count,
       description: `${stats.outcomes.hintUsedAtLeastOnce.pct.toFixed(1)}% of started`,
@@ -79,16 +73,9 @@ export function StatsCards({ stats }: { stats: Stats }) {
       icon: Languages,
     },
     {
-      title: "Completed All Questions & Ended",
-      value: stats.outcomes.completedAllAndEnded.count,
-      description: `${stats.outcomes.completedAllAndEnded.pct.toFixed(1)}% of started`,
-      icon: Trophy,
-    },
-    {
-      title: "Sessions Ended Before Q1 Complete",
-      value: stats.outcomes.endedBeforeQ1Complete.count,
-      description: `${stats.outcomes.endedBeforeQ1Complete.pct.toFixed(1)}% of started`,
-      icon: AlertCircle,
+      title: "Total Duration",
+      value: formatDuration(stats.totalDurationMs),
+      icon: Timer,
     },
   ];
 

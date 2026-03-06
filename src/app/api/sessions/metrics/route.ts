@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { fetchSewaiActivityMetadata } from "@/lib/sewai-prisma";
+import { buildCompletionBands } from "@/lib/completion-bands";
 
 export interface SessionMetricsRow {
   status: string;
   translated_clicks_events: number;
   total_questions_of_session: number;
   duration_of_session_ms: number | null;
+  started_at: string;
   topic_name: string;
   activity_name: string;
   hint_count: number;
@@ -23,6 +25,7 @@ interface SessionMetricsDbRow {
   translated_clicks_events: number;
   total_questions_of_session: number;
   duration_of_session_ms: number | null;
+  started_at: string;
   activity_name: string;
   hint_count: number;
   questions_completed: number;
@@ -33,8 +36,33 @@ interface SessionMetricsDbRow {
   activity_external_id: string;
 }
 
-export async function GET() {
+function normalizeOrgFilter(value: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || trimmed.toLowerCase() === "all") {
+    return null;
+  }
+
+  return trimmed;
+}
+
+function buildOrgFilterCondition(orgFilter: string | null): Prisma.Sql {
+  if (!orgFilter) {
+    return Prisma.sql`TRUE`;
+  }
+
+  return Prisma.sql`LOWER(COALESCE(NULLIF(s."orgName", ''), 'unknown')) = LOWER(${orgFilter})`;
+}
+
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const orgFilter = normalizeOrgFilter(searchParams.get("org"));
+    const orgFilterCondition = buildOrgFilterCondition(orgFilter);
+
     const baseRows = await prisma.$queryRaw<SessionMetricsDbRow[]>(Prisma.sql`
       WITH question_counts AS (
         SELECT
@@ -70,11 +98,12 @@ export async function GET() {
             ELSE NULL
           END
         )::int AS duration_of_session_ms,
+        s."startedAt"::text AS started_at,
         COALESCE(a.title, 'Unknown Activity') AS activity_name,
         COALESCE(hc.hint_count, 0)::int AS hint_count,
         COALESCE(qc.questions_completed, 0)::int AS questions_completed,
         st.email AS student_email,
-        st.email AS student_name,
+        COALESCE(NULLIF(st.name, ''), st.email) AS student_name,
         s."roomName" AS student_session_id,
         COALESCE(NULLIF(s."orgName", ''), 'unknown') AS org_name,
         COALESCE(a."externalId", '') AS activity_external_id
@@ -87,6 +116,7 @@ export async function GET() {
         ON qc.session_id = s.id
       LEFT JOIN hint_counts hc
         ON hc.session_id = s.id
+      WHERE ${orgFilterCondition}
       ORDER BY s."startedAt" DESC
     `);
 
@@ -111,10 +141,12 @@ export async function GET() {
         };
       },
     );
+    const completionBands = buildCompletionBands(rows);
 
     return NextResponse.json({
       totalSessions: rows.length,
       rows,
+      completionBands,
     });
   } catch (error) {
     console.error("Failed to fetch session metrics:", error);
