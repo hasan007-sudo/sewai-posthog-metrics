@@ -1,13 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Users,
-  BookOpen,
-  Lightbulb,
-  Languages,
-  Timer,
-} from "lucide-react";
+import { Users, BookOpen, Lightbulb, Languages, Timer } from "lucide-react";
 
 interface Stats {
   totalStudents: number;
@@ -57,19 +51,19 @@ export function StatsCards({ stats }: { stats: Stats }) {
     {
       title: "Total Sessions",
       value: stats.totalSessions,
-      description: `${stats.sessionsByStatus.STARTED} started, ${stats.sessionsByStatus.ENDED} ended`,
+      description: `${stats.sessionsByStatus.STARTED} incomplete, ${stats.sessionsByStatus.ENDED} complete`,
       icon: BookOpen,
     },
     {
       title: "Hint Used >=1",
       value: stats.outcomes.hintUsedAtLeastOnce.count,
-      description: `${stats.outcomes.hintUsedAtLeastOnce.pct.toFixed(1)}% of started`,
+      description: `${stats.outcomes.hintUsedAtLeastOnce.pct.toFixed(1)}% of sessions`,
       icon: Lightbulb,
     },
     {
       title: "Translate Used >=1",
       value: stats.outcomes.translateUsedAtLeastOnce.count,
-      description: `${stats.outcomes.translateUsedAtLeastOnce.pct.toFixed(1)}% of started`,
+      description: `${stats.outcomes.translateUsedAtLeastOnce.pct.toFixed(1)}% of sessions`,
       icon: Languages,
     },
     {

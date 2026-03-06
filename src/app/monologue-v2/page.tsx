@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prisma, withTransientRetry } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { StatsCards } from "@/components/dashboard/StatsCards";
 import { SessionMetricsTable } from "@/components/dashboard/SessionMetricsTable";
@@ -87,37 +87,6 @@ function buildOrgFilterCondition(orgFilter: string | null): Prisma.Sql {
   return Prisma.sql`LOWER(COALESCE(NULLIF(s."orgName", ''), 'unknown')) = LOWER(${orgFilter})`;
 }
 
-function isRetryableConnectionDropError(error: unknown): boolean {
-  if (!error || typeof error !== "object") {
-    return false;
-  }
-
-  const maybeError = error as { code?: unknown; message?: unknown; meta?: unknown };
-  const message = typeof maybeError.message === "string" ? maybeError.message : "";
-  const metaText =
-    maybeError.meta && typeof maybeError.meta === "object"
-      ? JSON.stringify(maybeError.meta)
-      : "";
-  const combined = `${message} ${metaText}`.toLowerCase();
-
-  return (
-    maybeError.code === "P2010" &&
-    combined.includes("server has closed the connection")
-  );
-}
-
-async function withTransientQueryRetry<T>(operation: () => Promise<T>): Promise<T> {
-  try {
-    return await operation();
-  } catch (error) {
-    if (!isRetryableConnectionDropError(error)) {
-      throw error;
-    }
-
-    return operation();
-  }
-}
-
 function buildEmptyStats(): DashboardStats {
   return {
     totalStudents: 0,
@@ -145,10 +114,8 @@ function buildEmptyStats(): DashboardStats {
 async function getStats(orgFilter: string | null): Promise<DashboardStats> {
   const orgFilterCondition = buildOrgFilterCondition(orgFilter);
 
-  let result: StatsAggregateRow[];
-  try {
-    result = await withTransientQueryRetry(() =>
-      prisma.$queryRaw<StatsAggregateRow[]>`
+  const result = await withTransientRetry(async (client) =>
+    client.$queryRaw<StatsAggregateRow[]>`
     WITH filtered_sessions AS (
       SELECT
         s.id,
@@ -220,12 +187,7 @@ async function getStats(orgFilter: string | null): Promise<DashboardStats> {
           AND questions_completed = 0
       )::int AS ended_before_q1_complete_sessions
     FROM session_rollup
-  `,
-    );
-  } catch (error) {
-    console.error("[monologue-v2] getStats query failed", error);
-    return buildEmptyStats();
-  }
+  `);
 
   const row = result[0];
   const totalSessions = row?.total_sessions ?? 0;
