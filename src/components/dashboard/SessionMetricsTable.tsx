@@ -79,7 +79,9 @@ function formatTotalQuestions(value: number): string | number {
 }
 
 function toDateOnly(value: string): string | null {
-  const parsed = Date.parse(value);
+  // Parse as UTC to avoid timezone issues with PostgreSQL timestamps
+  // PostgreSQL returns timestamps without timezone, so we append 'Z' to treat as UTC
+  const parsed = Date.parse(value + 'Z');
   if (Number.isNaN(parsed)) {
     return null;
   }
