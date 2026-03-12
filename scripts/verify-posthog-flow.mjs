@@ -10,6 +10,7 @@ dotenv.config();
 const EXPECTED_EVENT_TYPES = [
   "monologue_session_started",
   "monologue_session_end_clicked",
+  "monologue_session_ended",
   "monologue_question_completed",
   "monologue_translate_clicked",
   "next_activity_clicked",

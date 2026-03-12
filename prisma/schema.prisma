@@ -49,6 +49,7 @@ model Session {
   startedAt        DateTime
   endedAt          DateTime?
   durationMs       Int?
+  endReason        String?
 
   questionProgress QuestionProgress[]
   hintUsages       HintUsage[]

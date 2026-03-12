@@ -21,6 +21,14 @@ type EventHandler = (
 export const EVENT_HANDLERS: Record<string, EventHandler> = {
   monologue_session_started: handleSessionStarted,
   monologue_session_end_clicked: handleSessionEnded,
+  monologue_session_ended: (prisma, studentId, properties, timestamp) =>
+    handleSessionEnded(
+      prisma,
+      studentId,
+      properties,
+      timestamp,
+      "server_ended",
+    ),
   monologue_question_completed: handleQuestionCompleted,
   monologue_translate_clicked: handleTranslateClicked,
   next_activity_clicked: handleNextActivity,

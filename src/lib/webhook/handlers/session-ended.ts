@@ -5,7 +5,8 @@ export async function handleSessionEnded(
   prisma: PrismaClient,
   studentId: string,
   properties: Record<string, unknown>,
-  timestamp: string
+  timestamp: string,
+  endReason?: string,
 ): Promise<void> {
   const props = properties as unknown as SessionEndedProperties;
 
@@ -30,12 +31,23 @@ export async function handleSessionEnded(
   const durationMs =
     props.duration_ms ?? endedAt.getTime() - session.startedAt.getTime();
 
+  const updateData: {
+    status: "ENDED";
+    endedAt: Date;
+    durationMs: number;
+    endReason?: string;
+  } = {
+    status: "ENDED",
+    endedAt,
+    durationMs: Math.round(durationMs),
+  };
+
+  if (endReason && !session.endReason) {
+    updateData.endReason = endReason;
+  }
+
   await prisma.session.update({
     where: { roomName },
-    data: {
-      status: "ENDED",
-      endedAt,
-      durationMs: Math.round(durationMs),
-    },
+    data: updateData,
   });
 }
